@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# Crypt Crawler - clothing filter patch
-# Run from inside your crypt-crawler folder:
-#   cd ~/Crypt-Crawler/crypt-crawler
-#   bash <(curl -sL https://raw.githubusercontent.com/michael-a-thomas/crypt-crawler-patch/main/filter_patch.sh)
-
+# Crypt Crawler - clothing filter patch v2
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== Applying clothing filter patch ==="
+echo "=== Applying clothing filter patch v2 ==="
 echo ""
 
 echo 'Updating src/ListingNormalizer.php...'
@@ -27,30 +23,20 @@ class ListingNormalizer
     public static function normalizeUrl(string $url, string $source): string
     {
         $url = trim($url);
-        if (!$url) {
-            return '';
-        }
+        if (!$url) return '';
         if (!str_starts_with($url, 'http')) {
             $url = 'https:' . ltrim($url, ':');
         }
-
         $parsed = parse_url($url);
-        if (empty($parsed['host'])) {
-            return $url;
-        }
-
+        if (empty($parsed['host'])) return $url;
         $scheme = $parsed['scheme'] ?? 'https';
         $host   = strtolower($parsed['host']);
         $path   = rtrim($parsed['path'] ?? '', '/');
-
-        $query = [];
+        $query  = [];
         if (!empty($parsed['query'])) {
             parse_str($parsed['query'], $query);
-            foreach (self::STRIP_PARAMS as $p) {
-                unset($query[$p]);
-            }
+            foreach (self::STRIP_PARAMS as $p) unset($query[$p]);
         }
-
         $path = match ($source) {
             'vinted'   => (preg_match('/\/items\/(\d+)/', $path, $m) ? '/items/' . $m[1] : $path),
             'depop'    => (preg_match('/\/products\/([^\/\?]+)/', $path, $m) ? '/products/' . $m[1] : $path),
@@ -58,11 +44,8 @@ class ListingNormalizer
             'mercari'  => (preg_match('/\/item\/(m\d+)/', $path, $m) ? '/item/' . $m[1] : $path),
             default    => $path,
         };
-
         $normalized = $scheme . '://' . $host . $path;
-        if ($query) {
-            $normalized .= '?' . http_build_query($query);
-        }
+        if ($query) $normalized .= '?' . http_build_query($query);
         return $normalized;
     }
 
@@ -81,25 +64,16 @@ class ListingNormalizer
     {
         $normalized = self::normalizeUrl($url, $source);
         $itemId     = self::extractItemId($normalized, $source);
-        if ($itemId) {
-            return $source . ':' . $itemId;
-        }
+        if ($itemId) return $source . ':' . $itemId;
         return $normalized ?: ($source . ':' . md5($url));
     }
 
     public static function deriveCategory(string $searchTerm): string
     {
         $term = strtoupper(trim($searchTerm));
-
-        if (in_array($term, ['SB DUNK', 'NIKE SB DUNK', 'NIKE DUNK'], true)) {
-            return 'All Dunks';
-        }
-        if (preg_match('/^(NIKE\s+)?AIR JORDAN(\s+\d+)?$/', $term)) {
-            return 'All Jordans';
-        }
-        if (in_array($term, ['AIR MAX', 'NIKE AIR MAX'], true)) {
-            return 'All Max';
-        }
+        if (in_array($term, ['SB DUNK', 'NIKE SB DUNK', 'NIKE DUNK'], true)) return 'All Dunks';
+        if (preg_match('/^(NIKE\s+)?AIR JORDAN(\s+\d+)?$/', $term)) return 'All Jordans';
+        if (in_array($term, ['AIR MAX', 'NIKE AIR MAX'], true)) return 'All Max';
         return 'Other';
     }
 
@@ -108,18 +82,14 @@ class ListingNormalizer
         $text = strtolower($title . ' ' . ($description ?? ''));
 
         // Global exclusions - clothing/non-sneaker items
-        foreach (['toddler', 'shirt', 'tee', 'onesie', 'shorts', 'hoodie', 'sweatshirt'] as $word) {
-            if (str_contains($text, $word)) {
-                return true;
-            }
+        foreach (['toddler', 'shirt', 'tee', 'onesie', 'onsie', 'romper', 'baby', 'child', 'shorts', 'hoodie', 'sweatshirt'] as $word) {
+            if (str_contains($text, $word)) return true;
         }
 
         // Jordan-specific exclusions
         if (self::deriveCategory($searchTerm) === 'All Jordans') {
             foreach (['card', 'autograph', 'jersey'] as $word) {
-                if (str_contains($text, $word)) {
-                    return true;
-                }
+                if (str_contains($text, $word)) return true;
             }
         }
 
@@ -128,14 +98,10 @@ class ListingNormalizer
 
     public static function normalizePrice(string|float|int|null $raw): ?float
     {
-        if ($raw === null || $raw === '') {
-            return null;
-        }
+        if ($raw === null || $raw === '') return null;
         $str     = (string) $raw;
         $cleaned = preg_replace('/[^\d.,]/', '', $str);
-        if (!$cleaned) {
-            return null;
-        }
+        if (!$cleaned) return null;
         if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $cleaned)) {
             $cleaned = str_replace('.', '', $cleaned);
             $cleaned = str_replace(',', '.', $cleaned);
@@ -148,9 +114,7 @@ class ListingNormalizer
 
     public static function normalizeSize(?string $raw): ?string
     {
-        if ($raw === null || trim($raw) === '') {
-            return null;
-        }
+        if ($raw === null || trim($raw) === '') return null;
         return trim($raw);
     }
 }
@@ -213,24 +177,22 @@ cat > 'config/sources.json' << 'CRYPT_EOF'
     }
   },
   "filters": {
-    "global_exclude":  ["toddler", "shirt", "tee", "onesie", "shorts", "hoodie", "sweatshirt"],
+    "global_exclude":  ["toddler", "shirt", "tee", "onesie", "onsie", "romper", "baby", "child", "shorts", "hoodie", "sweatshirt"],
     "jordan_exclude":  ["card", "autograph", "jersey"],
     "jordan_categories": ["All Jordans"]
   }
 }
 CRYPT_EOF
 
-echo 'Removing clothing listings already in the database...'
+echo 'Removing matching listings from database...'
 DB="data/crypt_crawler.sqlite"
 if [ -f "$DB" ]; then
-    sqlite3 "$DB" "DELETE FROM listings WHERE LOWER(title) LIKE '%shirt%' OR LOWER(title) LIKE '%onesie%' OR LOWER(title) LIKE '%shorts%' OR LOWER(title) LIKE '% tee %' OR LOWER(title) LIKE '% tee' OR LOWER(title) LIKE 'tee %' OR LOWER(title) LIKE '%hoodie%' OR LOWER(title) LIKE '%sweatshirt%' OR LOWER(title) LIKE '%toddler%';"
-    echo "Done. Remaining listings: $(sqlite3 \"$DB\" 'SELECT COUNT(*) FROM listings;')"
+    sqlite3 "$DB" "DELETE FROM listings WHERE LOWER(title) LIKE '%shirt%' OR LOWER(title) LIKE '%onesie%' OR LOWER(title) LIKE '%onsie%' OR LOWER(title) LIKE '%romper%' OR LOWER(title) LIKE '%baby%' OR LOWER(title) LIKE '%child%' OR LOWER(title) LIKE '%shorts%' OR LOWER(title) LIKE '% tee %' OR LOWER(title) LIKE '% tee' OR LOWER(title) LIKE 'tee %' OR LOWER(title) LIKE '%hoodie%' OR LOWER(title) LIKE '%sweatshirt%' OR LOWER(title) LIKE '%toddler%';"
+    echo "Remaining listings: $(sqlite3 \"$DB\" 'SELECT COUNT(*) FROM listings;')"
 else
-    echo "No database found yet - filters will apply on next crawl."
+    echo "No database yet - filters apply on next crawl."
 fi
 
 echo ""
-echo "=== Filter patch applied! ==="
-echo ""
-echo "Stop the current crawl (click Stop Crawl), then click Clear All Listings,"
-echo "then click Start Crawl again to get clean results."
+echo "=== Done! ==="
+echo "Click Stop Crawl, then Clear All Listings, then Start Crawl again."
