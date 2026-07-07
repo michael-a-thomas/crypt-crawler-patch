@@ -28,6 +28,7 @@ class ListingNormalizer
         $host   = strtolower($parsed['host']);
         $path   = rtrim($parsed['path'] ?? '', '/');
 
+        // Strip tracking query params
         $query = [];
         if (!empty($parsed['query'])) {
             parse_str($parsed['query'], $query);
@@ -36,6 +37,7 @@ class ListingNormalizer
             }
         }
 
+        // Source-specific path cleanup — keep only the canonical item segment
         $path = match ($source) {
             'vinted'   => (preg_match('/\/items\/(\d+)/', $path, $m) ? '/items/' . $m[1] : $path),
             'depop'    => (preg_match('/\/products\/([^\/\?]+)/', $path, $m) ? '/products/' . $m[1] : $path),
@@ -69,6 +71,7 @@ class ListingNormalizer
         if ($itemId) {
             return $source . ':' . $itemId;
         }
+        // Fallback: use the normalized URL, or a hash if empty
         return $normalized ?: ($source . ':' . md5($url));
     }
 
@@ -94,10 +97,10 @@ class ListingNormalizer
 
         // Global exclusions — clothing/non-sneaker items
         foreach ([
-            'toddler', 'shirt', 'tee', 'onesie', 'onsie', 'romper',
-            'baby', 'child', 'kids', 'shorts', 'hoodie', 'sweatshirt',
-            'sweatpants', 'sweats', 'sweat', 'long sleeve', 'pants',
-            'joggers', 'backpack', 'back pack',
+            'toddler', 'newborn', 'shirt', 'tee', 'onesie', 'onsie', 'romper',
+            'baby', 'child', 'kids', 'boys', 'girls', 'shorts', 'hoodie', 'sweatshirt',
+            'sweatpants', 'sweats', 'sweat', 'long sleeve', 'leggings', 'pants',
+            'joggers', 'backpack', 'back pack', 'hat',
         ] as $word) {
             if (str_contains($text, $word)) {
                 return true;
@@ -126,6 +129,7 @@ class ListingNormalizer
         if (!$cleaned) {
             return null;
         }
+        // European format detection: 1.234,56
         if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $cleaned)) {
             $cleaned = str_replace('.', '', $cleaned);
             $cleaned = str_replace(',', '.', $cleaned);
